@@ -1,0 +1,118 @@
+"""
+===============================================================================
+SIMULATION 6: VISCOUS BOUNDARY LAYER VELOCITY PROFILES & GROWTH MECHANICS
+File: simulation_6_boundary_layer.py
+Author: Paxton B.
+Date: October 2026
+
+Description:
+  Computes and visualizes viscous boundary layer growth over a flat surface.
+  Uses classical algebraic models for laminar and turbulent velocity profiles
+  and boundary layer thickness development along the surface.
+===============================================================================
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =============================================================================
+# 1. PHYSICAL CONSTANTS & FLOW FIELD PARAMETERS
+# =============================================================================
+U_INF: float = 25.0              # Free-stream velocity (m/s)
+NU_AIR: float = 1.5e-5           # Kinematic viscosity of air (m^2/s)
+PLATE_LENGTH: float = 1.2        # Total surface length (m)
+
+# Critical Reynolds number for transition
+CRITICAL_RE = 5.0e5
+X_TRANSITION = (CRITICAL_RE * NU_AIR) / U_INF  # Transition position (m)
+
+
+# =============================================================================
+# 2. BOUNDARY LAYER GROWTH WITH VIRTUAL ORIGIN MATCHING
+# =============================================================================
+x_vec = np.linspace(0.005, PLATE_LENGTH, 500)
+Re_x = (U_INF * x_vec) / NU_AIR
+
+# Laminar Growth (\delta = 5.0 * x / \sqrt{Re_x})
+delta_laminar = 5.0 * x_vec / np.sqrt(Re_x)
+
+# Continuous Transition via Virtual Origin Matching at x_trans
+delta_at_trans = 5.0 * X_TRANSITION / np.sqrt((U_INF * X_TRANSITION) / NU_AIR)
+x_0 = X_TRANSITION - ((delta_at_trans * (U_INF**0.2)) / (0.37 * (NU_AIR**0.2)))**(5.0 / 4.0)
+
+# Shifted turbulent growth after transition
+x_eff = np.maximum(x_vec - x_0, 1e-6)
+Re_x_eff = (U_INF * x_eff) / NU_AIR
+delta_turbulent_matched = 0.37 * x_eff / (Re_x_eff**0.2)
+
+# Continuous Composite Profile
+delta_actual = np.where(x_vec < X_TRANSITION, delta_laminar, delta_turbulent_matched)
+
+
+# =============================================================================
+# 3. PUBLICATION-QUALITY PLOTTING
+# =============================================================================
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.linewidth'] = 1.0
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.0, 5.0), dpi=300)
+
+# -----------------------------------------------------------------------------
+# Panel A: Velocity Profiles
+# -----------------------------------------------------------------------------
+y_norm = np.linspace(0.0, 1.0, 200)
+u_ratio_laminar = 1.5 * y_norm - 0.5 * (y_norm**3)
+u_ratio_turbulent = y_norm**(1.0 / 7.0)
+
+ax1.plot(u_ratio_laminar, y_norm, color='#1f77b4', linewidth=2.2,
+         label=r'Laminar Profile (Cubic)')
+ax1.plot(u_ratio_turbulent, y_norm, color='#d62728', linestyle='--', linewidth=2.2,
+         label=r'Turbulent Profile ($1/7^{\mathrm{th}}$ Power)')
+
+ax1.set_xlabel('Normalized Velocity ($u / U_{\infty}$)', fontsize=11, fontweight='bold', labelpad=8)
+ax1.set_ylabel('Normalized Wall Distance ($y / \delta$)', fontsize=11, fontweight='bold', labelpad=8)
+ax1.set_title('(a) Laminar vs. Turbulent Velocity Profiles', fontsize=11, fontweight='bold', pad=10)
+ax1.set_xlim(0.0, 1.05)
+ax1.set_ylim(0.0, 1.1)
+ax1.grid(True, linestyle=':', alpha=0.6)
+ax1.legend(loc='lower right', fontsize=8.5, framealpha=0.95)
+
+
+# -----------------------------------------------------------------------------
+# Panel B: Boundary Layer Growth with Explicit Region Shading & Labels
+# -----------------------------------------------------------------------------
+delta_mm = delta_actual * 1000.0
+
+# 1. Shaded Region Highlights
+ax2.axvspan(0, X_TRANSITION, color='#1f77b4', alpha=0.12, label='Laminar Zone')
+ax2.axvspan(X_TRANSITION, PLATE_LENGTH, color='#d62728', alpha=0.12, label='Turbulent Zone')
+
+# 2. Main Boundary Layer Thickness Line
+ax2.plot(x_vec, delta_mm, color='#2c3e50', linewidth=2.5, label=r'Boundary Layer $\delta(x)$')
+
+# 3. Transition Divider Line
+ax2.axvline(x=X_TRANSITION, color='#e74c3c', linestyle='--', linewidth=1.8)
+
+# 4. Direct Text Labels Centered in Each Zone
+ax2.text(X_TRANSITION * 0.5, 3.0, "LAMINAR REGION\n" + r"($\delta \propto \sqrt{x}$)",
+         fontsize=9.5, fontweight='bold', color='#1f77b4', ha='center',
+         bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#1f77b4', lw=1.2))
+
+ax2.text(X_TRANSITION + (PLATE_LENGTH - X_TRANSITION) * 0.5, 3.0, "TURBULENT REGION\n" + r"($\delta \propto x^{4/5}$)",
+         fontsize=9.5, fontweight='bold', color='#d62728', ha='center',
+         bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#d62728', lw=1.2))
+
+# Formatting Panel B
+ax2.set_xlabel('Streamwise Distance, $x$ (m)', fontsize=11, fontweight='bold', labelpad=8)
+ax2.set_ylabel('Boundary Layer Thickness, $\delta$ (mm)', fontsize=11, fontweight='bold', labelpad=8)
+ax2.set_title('(b) Physical Boundary Layer Growth', fontsize=11, fontweight='bold', pad=10)
+ax2.set_xlim(0.0, PLATE_LENGTH)
+ax2.set_ylim(0.0, 18.0)  # Fixed y-axis scale so labels sit cleanly below the curve
+ax2.grid(True, linestyle=':', alpha=0.6)
+ax2.legend(loc='upper left', fontsize=8.5, framealpha=0.95)
+
+plt.tight_layout()
+plt.savefig("simulation_6_boundary_layer.pdf", format='pdf', dpi=300, bbox_inches='tight')
+print("[SUCCESS] Exported updated boundary layer plot with clear region labels.")
+plt.show()
