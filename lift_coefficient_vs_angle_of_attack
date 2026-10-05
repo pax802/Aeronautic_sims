@@ -1,0 +1,137 @@
+"""
+===============================================================================
+SIMULATION 3: LIFT COEFFICIENT (C_L) VS. ANGLE OF ATTACK (ALPHA)
+File: Lift_coefficient_vs_angle_of_attack.py
+Author: Paxton B.
+Date: October 2026
+
+Description:
+  Models the non-linear relationship between Lift Coefficient (C_L) and
+  Angle of Attack (\alpha) across attached thin-airfoil theory flow, peak lift
+  generation (C_L,max), and post-stall boundary layer flow separation.
+===============================================================================
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =============================================================================
+# 1. AIRFOIL AERODYNAMIC CHARACTERISTICS & PARAMETERS
+# =============================================================================
+ALPHA_ZERO_LIFT_DEG: float = -2.0   # Zero-lift angle of attack \alpha_0 (degrees)
+C_L_SLOPE_THEORETICAL: float = 2.0 * np.pi  # Theoretical lift curve slope a_0 (per radian)
+ALPHA_STALL_DEG: float = 14.5       # Stall angle of attack \alpha_stall (degrees)
+C_L_MAX_TARGET: float = 1.65        # Maximum lift coefficient C_L,max at stall
+
+# Discretized Angle of Attack grid: \alpha \in [-5^\circ, 25^\circ]
+NUM_POINTS: int = 1000
+alpha_deg_grid = np.linspace(-5.0, 25.0, NUM_POINTS)
+
+
+# =============================================================================
+# 2. NUMERICAL LIFT COEFFICIENT COMPUTATION (CONTINUOUS FLOW REGIME)
+# =============================================================================
+def calculate_lift_curve(alpha_deg: np.ndarray, alpha_zero_deg: float = ALPHA_ZERO_LIFT_DEG,
+                         alpha_stall_deg: float = ALPHA_STALL_DEG) -> tuple:
+    alpha_rad = np.radians(alpha_deg)
+    alpha_zero_rad = np.radians(alpha_zero_deg)
+
+    # 1. Pure Linear Thin Airfoil Theory: C_L = 2\pi * (\alpha - \alpha_0)
+    c_l_linear = C_L_SLOPE_THEORETICAL * (alpha_rad - alpha_zero_rad)
+
+    # 2. Continuous Non-Linear Curve using a smooth Logistic Blending Function
+    # Pre-stall attached flow component
+    a_norm = (alpha_deg - alpha_zero_deg) / (alpha_stall_deg - alpha_zero_deg)
+    c_l_attached = C_L_MAX_TARGET * (1.5 * a_norm - 0.5 * (a_norm ** 3))
+
+    # Post-stall separated flow component
+    alpha_post = np.maximum(0, alpha_deg - alpha_stall_deg)
+    c_l_separated = C_L_MAX_TARGET * np.exp(-0.085 * (alpha_post ** 1.2)) + 0.25 * np.sin(np.radians(alpha_deg))
+
+    # Smooth transition weight (Sigmoid around stall angle)
+    k = 0.8  # Transition sharpness
+    w = 1.0 / (1.0 + np.exp(k * (alpha_deg - alpha_stall_deg)))
+
+    # Blended continuous lift coefficient
+    c_l_nonlinear = w * c_l_attached + (1.0 - w) * c_l_separated
+
+    return c_l_linear, c_l_nonlinear
+
+
+# Execute Calculation Engine
+c_l_linear, c_l_actual = calculate_lift_curve(alpha_deg_grid)
+
+# Locate Peak Performance Key Points
+idx_stall = np.argmax(c_l_actual)
+alpha_max_c_l = alpha_deg_grid[idx_stall]
+c_l_max_val = c_l_actual[idx_stall]
+
+
+# =============================================================================
+# 3. PUBLICATION-QUALITY PLOTTING & EXPORT ENGINE
+# =============================================================================
+# Set publication style defaults
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.linewidth'] = 1.0
+plt.rcParams['mathtext.fontset'] = 'cm'
+
+fig, ax = plt.subplots(figsize=(8.5, 5.2), dpi=300)
+
+# Plot 1: Ideal Linear Thin Airfoil Theory
+ax.plot(alpha_deg_grid, c_l_linear, color='#7f7f7f', linestyle='--', linewidth=1.6,
+        label=r'Theoretical Linear Flow ($C_L = 2\pi(\alpha - \alpha_0)$)')
+
+# Plot 2: Empirical Curve with Boundary Layer Stall
+ax.plot(alpha_deg_grid, c_l_actual, color='#1f77b4', linewidth=2.4,
+        label=r'Actual Airfoil Curve (Viscous Flow)')
+
+# Highlight Regions: Linear Regime vs Post-Stall Flow Separation
+ax.axvspan(-5, alpha_max_c_l, color='green', alpha=0.06, label='Attached Linear Lift Regime')
+ax.axvspan(alpha_max_c_l, 25, color='red', alpha=0.08, label='Post-Stall Flow Separation')
+
+# Marker & Annotation: Maximum Lift Coefficient (C_L,max / Stall Point)
+ax.plot(alpha_max_c_l, c_l_max_val, marker='o', markersize=7, color='#d62728', zorder=5)
+ax.annotate(
+    fr'Critical Stall Point ($\alpha={alpha_max_c_l:.1f}^\circ$)' + '\n' + fr'$C_{{L,\mathrm{{max}}}} = {c_l_max_val:.2f}$',
+    xy=(alpha_max_c_l, c_l_max_val),
+    xytext=(alpha_max_c_l - 8.5, c_l_max_val - 0.35),
+    arrowprops=dict(arrowstyle='->', color='#d62728', lw=1.5, connectionstyle='arc3,rad=0.1'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#d62728', alpha=0.9)
+)
+
+# Marker & Annotation: Zero-Lift Angle of Attack (\alpha_0)
+ax.plot(ALPHA_ZERO_LIFT_DEG, 0, marker='s', markersize=6, color='#2ca02c', zorder=5)
+ax.annotate(
+    fr'Zero-Lift Angle ($\alpha_0 = {ALPHA_ZERO_LIFT_DEG:.1f}^\circ$)',
+    xy=(ALPHA_ZERO_LIFT_DEG, 0),
+    xytext=(ALPHA_ZERO_LIFT_DEG + 1.5, -0.35),
+    arrowprops=dict(arrowstyle='->', color='#2ca02c', lw=1.2, connectionstyle='arc3,rad=-0.1'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#2ca02c', alpha=0.9)
+)
+
+# Zero-reference lines
+ax.axhline(0, color='black', linestyle='-', linewidth=0.8, alpha=0.6)
+ax.axvline(0, color='black', linestyle='-', linewidth=0.8, alpha=0.6)
+
+# Axes Labels and Bounds
+ax.set_xlabel(r'Angle of Attack, $\alpha$ (degrees)', fontsize=11, fontweight='bold', labelpad=8)
+ax.set_ylabel(r'Lift Coefficient, $C_L$', fontsize=11, fontweight='bold', labelpad=8)
+ax.set_title(r'Lift Coefficient ($C_L$) vs. Angle of Attack ($\alpha$) and Stall Boundary',
+             fontsize=12, fontweight='bold', pad=12)
+
+ax.set_xlim(-5, 25)
+ax.set_ylim(-0.6, 2.0)
+ax.grid(True, linestyle='--', alpha=0.5)
+ax.legend(loc='lower right', framealpha=0.95, fontsize=9.0)
+
+plt.tight_layout()
+
+# Save High-Resolution PDF Vector Graphic
+output_filename = "simulation_3_lift_coefficient.pdf"
+plt.savefig(output_filename, format='pdf', dpi=300, bbox_inches='tight')
+print(f"[SUCCESS] High-resolution vector plot generated and exported as: '{output_filename}'")
+
+plt.show()
