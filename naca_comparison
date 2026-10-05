@@ -1,0 +1,35 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define chord x/c from 0 to 1
+x_c = np.linspace(0.001, 1.0, 300)
+
+# Idealized Cp curve profiles at alpha = 4 degrees
+# NACA 0012
+cp_upper_0012 = -1.15 * (1 - x_c)**0.5 * np.exp(-3 * x_c) - 0.1
+cp_lower_0012 = 0.8 * (1 - x_c)**0.5 * np.exp(-5 * x_c) + 0.05
+
+# NACA 4412 (cambered - stronger suction peak)
+cp_upper_4412 = -2.38 * (1 - x_c)**0.4 * np.exp(-2.5 * x_c) - 0.15
+cp_lower_4412 = 0.9 * (1 - x_c)**0.6 * np.exp(-4 * x_c) + 0.1
+
+# Plot setup
+plt.figure(figsize=(8, 5), dpi=300)
+
+plt.plot(x_c, cp_upper_0012, 'b-', label='NACA 0012 (Upper)')
+plt.plot(x_c, cp_lower_0012, 'b--', label='NACA 0012 (Lower)')
+plt.plot(x_c, cp_upper_4412, 'r-', label='NACA 4412 (Upper)')
+plt.plot(x_c, cp_lower_4412, 'r--', label='NACA 4412 (Lower)')
+
+# Invert y-axis (standard aerodynamic Cp plot convention)
+plt.gca().invert_yaxis()
+plt.title(r'Pressure Coefficient ($C_p$) Distribution at $\alpha = 4^\circ$', fontsize=12, fontweight='bold')
+plt.xlabel(r'Normalized Chord Position ($x/c$)', fontsize=11)
+plt.ylabel(r'Pressure Coefficient ($C_p$)', fontsize=11)
+plt.grid(True, linestyle=':', alpha=0.6)
+plt.legend(loc='upper right', frameon=True)
+plt.tight_layout()
+
+# Save and pop up the figure window
+plt.savefig('naca_comparison_cp.png', dpi=300)
+plt.show()
