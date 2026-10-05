@@ -1,0 +1,155 @@
+"""
+===============================================================================
+SIMULATION 2: CENTER OF PRESSURE (x_cp) NUMERICAL INTEGRATION
+File: simulation_2_center_of_pressure.py
+Author: Paxton B.
+Date: October 2026
+
+Description:
+  Computes the Center of Pressure (x_cp) along an airfoil chord line using
+  1D pressure distribution functions p(x). Implements the continuous integral
+  formulation from Section 4.2 of the paper:
+
+      x_cp = \frac{\int_0^c x \cdot p(x) \, dx}{\int_0^c p(x) \, dx}
+
+  This module uses Simpson's rule (via scipy.integrate) to evaluate:
+    1. Upper and lower surface pressure distributions p_upper(x) and p_lower(x).
+    2. Net pressure difference \Delta p(x) = p_lower(x) - p_upper(x).
+    3. The absolute chordwise location (x_cp) and normalized fraction (x_cp / c).
+===============================================================================
+"""
+
+import numpy as np
+from scipy.integrate import simpson
+
+# =============================================================================
+# 1. GEOMETRIC & FREESTREAM FLUID PARAMETERS
+# =============================================================================
+CHORD_LENGTH: float = 1.0  # Standardized airfoil chord length c (meters)
+ALPHA_DEG: float = 6.0  # Angle of attack \alpha (degrees)
+P_INF: float = 101325.0  # Standard atmospheric static pressure (Pa)
+Q_INF: float = 500.0  # Freestream dynamic pressure q (Pa)
+
+# Discretization grid along the chord x \in [0, c]
+NUM_POINTS: int = 1000
+x_grid = np.linspace(0.0001, CHORD_LENGTH, NUM_POINTS)  # Avoid exact zero for singularity protection
+
+
+# =============================================================================
+# 2. PRESSURE DISTRIBUTION ANALYTICAL MODELS
+# =============================================================================
+def model_pressure_distribution(x: np.ndarray, chord: float = CHORD_LENGTH, alpha_deg: float = ALPHA_DEG) -> tuple:
+    """
+    Models the differential pressure distribution across the upper and lower surfaces
+    of a conventional thin airfoil using a modified Prandtl-Glauert potential flow model.
+
+    Parameters:
+        x (np.ndarray): Discretized chord positions from leading edge (x=0) to trailing edge (x=c).
+        chord (float): Total chord length c (m).
+        alpha_deg (float): Angle of attack in degrees.
+
+    Returns:
+        tuple: (p_upper, p_lower, delta_p) in Pascals (Pa).
+    """
+    x_norm = x / chord
+    alpha_rad = np.radians(alpha_deg)
+
+    # Upper surface experiences accelerated flow -> reduced pressure (suction peak near leading edge)
+    cp_upper = -2.0 * np.sin(alpha_rad) * np.sqrt((1.0 - x_norm) / x_norm) - 0.2 * (1.0 - x_norm)
+
+    # Lower surface experiences stagnation / compression -> higher pressure
+    cp_lower = 0.8 * np.sin(alpha_rad) * (1.0 - x_norm) ** 2 + 0.05
+
+    # Convert pressure coefficients C_p to physical static pressures
+    p_upper = P_INF + cp_upper * Q_INF
+    p_lower = P_INF + cp_lower * Q_INF
+
+    # Net differential pressure distribution pulling/pushing vertically
+    delta_p = p_lower - p_upper
+
+    return p_upper, p_lower, delta_p
+
+
+# =============================================================================
+# 3. NUMERICAL INTEGRATION FOR LIFT AND MOMENT (SIMPSON'S RULE)
+# =============================================================================
+p_upper, p_lower, delta_p = model_pressure_distribution(x_grid)
+
+# Total Net Aerodynamic Lift Force per unit span (N/m): \int \Delta p(x) dx
+net_lift = simpson(y=delta_p, x=x_grid)
+
+# Total Aerodynamic Pitching Moment about the Leading Edge (N*m/m): \int x * \Delta p(x) dx
+pitching_moment_le = simpson(y=x_grid * delta_p, x=x_grid)
+
+# Center of Pressure Calculation: x_cp = Moment / Lift
+x_cp = pitching_moment_le / net_lift
+x_cp_percent = (x_cp / CHORD_LENGTH) * 100.0
+
+# =============================================================================
+# 4. CONSOLE NUMERICAL VERIFICATION SUMMARY
+# =============================================================================
+print("=" * 70)
+print("AERONAUTICAL CENTER OF PRESSURE (x_cp) INTEGRATION SUMMARY")
+print("=" * 70)
+print(f"Airfoil Chord Length (c)      : {CHORD_LENGTH:.2f} m")
+print(f"Angle of Attack (\alpha)        : {ALPHA_DEG:.1f}°")
+print(f"Integrated Lift Force (L')    : {net_lift:.3f} N/m")
+print(f"Pitching Moment LE (M_LE)     : {pitching_moment_le:.3f} N*m/m")
+print(f"Calculated Center of Pressure : x_cp = {x_cp:.4f} m ({x_cp_percent:.2f}% of chord)")
+print("=" * 70)
+# =============================================================================
+# 5. PUBLICATION-QUALITY PLOTTING & EXPORT ENGINE
+# =============================================================================
+import matplotlib.pyplot as plt
+
+# Set publication style defaults
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.linewidth'] = 1.0
+plt.rcParams['mathtext.fontset'] = 'cm'
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.5, 6.5), dpi=300, sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+
+# --- TOP SUBPLOT: Upper and Lower Surface Pressure Profiles ---
+ax1.plot(x_grid / CHORD_LENGTH, p_upper / 1000.0, color='#1f77b4', linewidth=2.0, label=r'Upper Surface Pressure ($p_{\mathrm{upper}}$)')
+ax1.plot(x_grid / CHORD_LENGTH, p_lower / 1000.0, color='#d62728', linewidth=2.0, label=r'Lower Surface Pressure ($p_{\mathrm{lower}}$)')
+ax1.fill_between(x_grid / CHORD_LENGTH, p_upper / 1000.0, p_lower / 1000.0, color='gray', alpha=0.15, label=r'Net Pressure Area ($\Delta p$)')
+
+ax1.set_ylabel('Static Pressure (kPa)', fontsize=11, fontweight='bold')
+ax1.set_title(r'Airfoil Pressure Distribution & Integrated Center of Pressure ($x_{\mathrm{cp}}$)', fontsize=12, fontweight='bold', pad=10)
+ax1.grid(True, linestyle='--', alpha=0.5)
+ax1.legend(loc='upper right', framealpha=0.9, fontsize=9.5)
+
+# --- BOTTOM SUBPLOT: Net Pressure Difference (\Delta p) & x_cp Vector Location ---
+ax2.plot(x_grid / CHORD_LENGTH, delta_p / 1000.0, color='#2ca02c', linewidth=2.2, label=r'Net Pressure Difference ($\Delta p = p_{\mathrm{lower}} - p_{\mathrm{upper}}$)')
+ax2.axhline(0, color='black', linestyle='-', linewidth=0.8, alpha=0.7)
+
+# Vertical marker for the Center of Pressure (x_cp)
+ax2.axvline(x_cp / CHORD_LENGTH, color='#9467bd', linestyle='--', linewidth=2.0, label=f'Center of Pressure ($x_{{\\mathrm{{cp}}}} = {x_cp_percent:.1f}\\%$ c)')
+ax2.plot(x_cp / CHORD_LENGTH, 0, marker='o', markersize=8, color='#9467bd')
+
+# Annotation box shifted further right and lowered
+ax2.annotate(
+    f'Resultant Aerodynamic Force Vector\n$x_{{\\mathrm{{cp}}}} = {x_cp:.3f}$ m ({x_cp_percent:.1f}% chord)',
+    xy=(x_cp / CHORD_LENGTH, np.max(delta_p / 1000.0) * 0.25),
+    xytext=(x_cp / CHORD_LENGTH + 0.35, np.max(delta_p / 1000.0) * 0.45),
+    arrowprops=dict(arrowstyle='->', color='#9467bd', lw=1.5, connectionstyle='arc3,rad=-0.1'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#9467bd', alpha=0.9)
+)
+
+ax2.set_xlabel('Normalized Chord Position ($x / c$)', fontsize=11, fontweight='bold', labelpad=8)
+ax2.set_ylabel('$\Delta p$ (kPa)', fontsize=11, fontweight='bold')
+ax2.set_xlim(0, 1.0)
+ax2.grid(True, linestyle='--', alpha=0.5)
+ax2.legend(loc='upper right', framealpha=0.9, fontsize=9.5)
+
+plt.tight_layout()
+
+# Save High-Resolution PDF Vector Graphic for Overleaf Insertion
+output_filename = "simulation_2_center_of_pressure.pdf"
+plt.savefig(output_filename, format='pdf', dpi=300, bbox_inches='tight')
+print(f"[SUCCESS] High-resolution vector plot generated and exported as: '{output_filename}'")
+
+# Display Plot
+plt.show()
