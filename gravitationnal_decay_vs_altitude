@@ -1,0 +1,181 @@
+"""
+===============================================================================
+SIMULATION 1: GRAVITATIONAL DECAY VS. ALTITUDE
+File: simulation_1_gravity.py
+Author: Paxton B.
+Date: October 2026
+
+Description:
+  Computes the dynamic decay of gravitational acceleration (g_alt) as a function
+  of geometric altitude (h) above Earth's mean surface radius (r_e), derived from
+  Newton's Law of Universal Gravitation:
+      g_alt = g_0 * (r_e / (r_e + h))^2
+
+  This module evaluates two altitude regimes:
+    1. Tropospheric / Commercial Aviation Regime (0 km to 20 km)
+    2. High-Altitude / Near-Space & Orbital Entry Regime (0 km to 200 km)
+===============================================================================
+"""
+
+import numpy as np
+
+
+# =============================================================================
+# 1. PHYSICAL & GEOPHYSICAL CONSTANTS (SI UNITS)
+# =============================================================================
+G_0: float = 9.80665         # Standard sea-level acceleration due to gravity (m/s^2)
+R_E: float = 6371000.0       # Earth's mean spherical radius (meters)
+G_CONSTANT: float = 6.67430e-11  # Universal Gravitational Constant (m^3 / (kg * s^2))
+M_EARTH: float = 5.9722e24   # Earth's total mass (kilograms)
+
+# Specific altitude benchmarks for analytical comparison (in meters)
+ALT_COMMERCIAL: float = 11000.0   # Standard commercial flight cruising altitude (11 km ~ 36,000 ft)
+ALT_STRATOSPHERE: float = 25000.0  # High-altitude reconnaissance / supersonic flight (25 km)
+ALT_KARMAN_LINE: float = 100000.0  # Edge of space / Karman Line (100 km)
+
+
+# =============================================================================
+# 2. CORE NUMERICAL COMPUTATION FUNCTIONS
+# =============================================================================
+def calculate_gravitational_decay(altitudes: np.ndarray, g_0: float = G_0, r_e: float = R_E) -> np.ndarray:
+    """
+    Calculates localized acceleration due to gravity across an array of geometric altitudes.
+
+    Parameters:
+        altitudes (np.ndarray): Array of altitudes above sea level in meters (m).
+        g_0 (float): Standard gravitational acceleration at sea level (m/s^2).
+        r_e (float): Earth mean radius in meters (m).
+
+    Returns:
+        np.ndarray: Gravitational acceleration array (m/s^2) corresponding to each altitude.
+    """
+    return g_0 * (r_e / (r_e + altitudes)) ** 2
+
+
+def calculate_percentage_error(g_alt: np.ndarray, g_0: float = G_0) -> np.ndarray:
+    """
+    Computes the percentage deviation of actual gravity relative to the constant sea-level assumption.
+
+    Parameters:
+        g_alt (np.ndarray): Localized gravitational acceleration (m/s^2).
+        g_0 (float): Constant baseline gravity assumption (m/s^2).
+
+    Returns:
+        np.ndarray: Percentage reduction (%) at each point.
+    """
+    return ((g_0 - g_alt) / g_0) * 100.0
+
+
+# =============================================================================
+# 3. DISCRETIZED ALTITUDE MESHGRID GENERATION
+# =============================================================================
+# Regime A: Tropospheric / Commercial Scale (0 to 20 km, high resolution step)
+altitudes_commercial_m = np.linspace(0, 20000, 1000)
+g_commercial = calculate_gravitational_decay(altitudes_commercial_m)
+error_commercial = calculate_percentage_error(g_commercial)
+
+# Regime B: High-Altitude / Suborbital Scale (0 to 200 km)
+altitudes_macro_m = np.linspace(0, 200000, 2000)
+g_macro = calculate_gravitational_decay(altitudes_macro_m)
+error_macro = calculate_percentage_error(g_macro)
+
+
+# =============================================================================
+# 4. BENCHMARK POINT CALCULATIONS & CONSOLE ANALYSIS
+# =============================================================================
+g_11km = calculate_gravitational_decay(ALT_COMMERCIAL)
+err_11km = calculate_percentage_error(g_11km)
+
+g_25km = calculate_gravitational_decay(ALT_STRATOSPHERE)
+err_25km = calculate_percentage_error(g_25km)
+
+g_100km = calculate_gravitational_decay(ALT_KARMAN_LINE)
+err_100km = calculate_percentage_error(g_100km)
+
+print("=" * 70)
+print("AERONAUTICAL GRAVITATIONAL DECAY ANALYSIS SUMMARY")
+print("=" * 70)
+print(f"Sea-Level Baseline (0 km)     : g = {G_0:.5f} m/s^2 | Error = 0.0000%")
+print(f"Commercial Cruising (11 km)   : g = {g_11km:.5f} m/s^2 | Error = {err_11km:.4f}%")
+print(f"Stratospheric Flight (25 km)  : g = {g_25km:.5f} m/s^2 | Error = {err_25km:.4f}%")
+print(f"Karman Line Boundary (100 km) : g = {g_100km:.5f} m/s^2 | Error = {err_100km:.4f}%")
+print("=" * 70)
+# =============================================================================
+# 5. PUBLICATION-QUALITY PLOTTING & EXPORT ENGINE
+# =============================================================================
+import matplotlib.pyplot as plt
+
+# Set publication style defaults
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.linewidth'] = 1.0
+plt.rcParams['mathtext.fontset'] = 'cm'  # Computer Modern LaTeX math formatting
+
+fig, ax1 = plt.subplots(figsize=(8.5, 5.0), dpi=300)
+
+# Convert altitudes from meters to kilometers for plotting clarity
+alt_km_macro = altitudes_macro_m / 1000.0
+
+# Plot Primary Line: Gravitational Decay (g_alt)
+color_g = '#1f77b4'  # Deep professional blue
+ax1.set_xlabel('Geometric Altitude, $h$ (km)', fontsize=11, fontweight='bold', labelpad=8)
+ax1.set_ylabel('Gravitational Acceleration, $g_{\\mathrm{alt}}$ (m/s$^2$)', color=color_g, fontsize=11, fontweight='bold')
+line1 = ax1.plot(alt_km_macro, g_macro, color=color_g, linewidth=2.2, label=r'Gravitational Acceleration ($g_{\mathrm{alt}}$)')
+ax1.tick_params(axis='y', labelcolor=color_g)
+ax1.set_xlim(0, 200)
+ax1.set_ylim(7.5, 10.0)
+ax1.grid(True, which='major', linestyle='--', alpha=0.5, color='gray')
+
+# Create Secondary Y-Axis for Percentage Decay Error
+ax2 = ax1.twinx()
+color_err = '#d62728'  # Precision red
+ax2.set_ylabel('Percentage Reduction from $g_0$ (%)', color=color_err, fontsize=11, fontweight='bold')
+line2 = ax2.plot(alt_km_macro, error_macro, color=color_err, linewidth=1.8, linestyle=':', label=r'Percentage Decay Error (%)')
+ax2.tick_params(axis='y', labelcolor=color_err)
+ax2.set_ylim(0, 100 * (1 - 7.5 / G_0))  # Matched scale range
+
+# Annotate Benchmark A: Commercial Aviation Cruising Altitude
+ax1.plot(ALT_COMMERCIAL / 1000.0, g_11km, marker='o', markersize=6, color='#2ca02c')
+ax1.annotate(
+    f'Commercial Cruising Altitude (11 km)\n'
+    f'$g = {g_11km:.3f}$ m/s$^2$ (Decay: {err_11km:.2f}%)',
+    xy=(ALT_COMMERCIAL / 1000.0, g_11km),
+    xytext=(25, 9.4),
+    arrowprops=dict(arrowstyle='->', color='#2ca02c', lw=1.2, connectionstyle='arc3,rad=-0.15'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#2ca02c', alpha=0.9)
+)
+
+# Annotate Benchmark B: Kármán Line / Space Boundary
+ax1.plot(ALT_KARMAN_LINE / 1000.0, g_100km, marker='s', markersize=6, color='#9467bd')
+ax1.annotate(
+    f'Kármán Line Space Boundary (100 km)\n'
+    f'$g = {g_100km:.3f}$ m/s$^2$ (Decay: {err_100km:.2f}%)',
+    xy=(ALT_KARMAN_LINE / 1000.0, g_100km),
+    xytext=(110, 8.3),
+    arrowprops=dict(arrowstyle='->', color='#9467bd', lw=1.2, connectionstyle='arc3,rad=0.15'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#9467bd', alpha=0.9)
+)
+
+# Highlight Commercial Flight Altitude Range (0 - 12 km) as a Shaded Region
+ax1.axvspan(0, 12, color='green', alpha=0.08, label='Tropospheric Aviation Boundary')
+
+# Unified Legend Construction
+lines = line1 + line2
+labels = [l.get_label() for l in lines]
+ax1.legend(lines, labels, loc='upper right', framealpha=0.9, fontsize=9.5)
+
+# Chart Formatting Title
+plt.title(r'Theoretical Gravitational Decay Field ($g_{\mathrm{alt}}$) vs. Altitude ($h$)', fontsize=12, fontweight='bold', pad=12)
+
+# Tight layout for vector cropping
+plt.tight_layout()
+
+# Save High-Resolution PDF Vector Graphic for Overleaf Insertion
+output_filename = "simulation_1_gravitational_decay.pdf"
+plt.savefig(output_filename, format='pdf', dpi=300, bbox_inches='tight')
+print(f"[SUCCESS] High-resolution vector plot generated and exported as: '{output_filename}'")
+
+# Display Plot
+plt.show()
