@@ -1,0 +1,165 @@
+"""
+===============================================================================
+SIMULATION 4: DRAG POLAR & AERODYNAMIC EFFICIENCY BREAKDOWN
+File: simulation_4_drag_polar.py
+Author: Paxton B.
+Date: October 2026
+
+Description:
+  Models total aircraft drag coefficient (C_D) as a parabolic function of lift
+  coefficient (C_L) by separating total drag into its core components:
+    1. Parasite Drag (C_D0): Zero-lift drag due to skin friction and form drag.
+    2. Induced Drag (C_Di): Lift-induced drag caused by wingtip vortices.
+
+  Theoretical Model:
+    C_D = C_D0 + k * C_L^2
+    where k = 1 / (\pi * AR * e)
+===============================================================================
+"""
+
+import numpy as np
+
+# =============================================================================
+# 1. AIRCRAFT GEOMETRY & AERODYNAMIC COEFFICIENTS
+# =============================================================================
+ASPECT_RATIO: float = 8.5          # Wing Aspect Ratio (AR = b^2 / S)
+OSWALD_EFFICIENCY: float = 0.82    # Oswald Span Efficiency Factor (e)
+C_D0_PARASITE: float = 0.0250      # Parasite / Zero-Lift Drag Coefficient (C_D0)
+
+# Calculate Induced Drag Factor: k = 1 / (\pi * AR * e)
+INDUCED_DRAG_K: float = 1.0 / (np.pi * ASPECT_RATIO * OSWALD_EFFICIENCY)
+
+# Discretized Lift Coefficient Range: C_L \in [-0.2, 1.6]
+NUM_POINTS: int = 500
+c_l_grid = np.linspace(-0.2, 1.6, NUM_POINTS)
+
+
+# =============================================================================
+# 2. NUMERICAL DRAG BREAKDOWN COMPUTATION
+# =============================================================================
+def calculate_drag_polar(c_l: np.ndarray, c_d0: float = C_D0_PARASITE, k: float = INDUCED_DRAG_K) -> tuple:
+    """
+    Computes parasite drag, induced drag, total drag, and lift-to-drag ratio (L/D).
+
+    Parameters:
+        c_l (np.ndarray): Lift coefficient range.
+        c_d0 (float): Zero-lift parasite drag coefficient.
+        k (float): Induced drag proportional factor.
+
+    Returns:
+        tuple: (c_d_parasite, c_d_induced, c_d_total, l_d_ratio)
+    """
+    # 1. Parasite Drag: Constant across attached lift regime
+    c_d_parasite = np.full_like(c_l, c_d0)
+
+    # 2. Induced Drag: Quadratic function of lift coefficient (C_Di = k * C_L^2)
+    c_d_induced = k * (c_l ** 2)
+
+    # 3. Total Drag Polar: C_D = C_D0 + C_Di
+    c_d_total = c_d_parasite + c_d_induced
+
+    # 4. Aerodynamic Efficiency Ratio: L/D = C_L / C_D
+    # Prevent divide-by-zero errors at zero drag
+    l_d_ratio = np.where(c_d_total > 0, c_l / c_d_total, 0.0)
+
+    return c_d_parasite, c_d_induced, c_d_total, l_d_ratio
+
+
+# Execute Calculation Engine
+c_d_parasite, c_d_induced, c_d_total, l_d_ratio = calculate_drag_polar(c_l_grid)
+
+# Locate Maximum Lift-to-Drag Ratio (L/D)_max Performance Point
+idx_max_l_d = np.argmax(l_d_ratio)
+c_l_opt = c_l_grid[idx_max_l_d]
+c_d_opt = c_d_total[idx_max_l_d]
+max_l_d_val = l_d_ratio[idx_max_l_d]
+
+
+# =============================================================================
+# 3. CONSOLE VERIFICATION SUMMARY
+# =============================================================================
+print("=" * 70)
+print("AERONAUTICAL DRAG POLAR & AERODYNAMIC EFFICIENCY ANALYSIS")
+print("=" * 70)
+print(f"Aspect Ratio (AR)                 : {ASPECT_RATIO:.2f}")
+print(f"Oswald Efficiency Factor (e)      : {OSWALD_EFFICIENCY:.2f}")
+print(f"Induced Drag Factor (k)           : {INDUCED_DRAG_K:.6f}")
+print(f"Parasite Drag Coefficient (C_D0)  : {C_D0_PARASITE:.4f}")
+print("-" * 70)
+print(f"Maximum Lift-to-Drag Ratio (L/D)  : {max_l_d_val:.2f}")
+print(f"Optimal Lift Coefficient (C_L,opt): {c_l_opt:.4f}")
+print(f"Optimal Total Drag (C_D,opt)      : {c_d_opt:.4f}")
+print("=" * 70)
+# =============================================================================
+# 4. PUBLICATION-QUALITY PLOTTING & EXPORT ENGINE
+# =============================================================================
+import matplotlib.pyplot as plt
+
+# Set publication style defaults
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.linewidth'] = 1.0
+plt.rcParams['mathtext.fontset'] = 'cm'
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 5.0), dpi=300)
+
+# --- LEFT SUBPLOT: Drag Polar (C_D vs. C_L Breakdown) ---
+ax1.plot(c_d_parasite, c_l_grid, color='#d62728', linestyle='--', linewidth=1.8, label=r'Parasite Drag ($C_{D0}$)')
+ax1.plot(c_d_induced, c_l_grid, color='#2ca02c', linestyle='--', linewidth=1.8, label=r'Induced Drag ($C_{Di} = k C_L^2$)')
+ax1.plot(c_d_total, c_l_grid, color='#1f77b4', linewidth=2.4, label=r'Total Drag Polar ($C_D = C_{D0} + C_{Di}$)')
+
+# Marker & Annotation: Maximum L/D Point
+ax1.plot(c_d_opt, c_l_opt, marker='o', markersize=7, color='#9467bd', zorder=5)
+ax1.annotate(
+    fr'$(L/D)_{{\mathrm{{max}}}}$ Point' + '\n' + fr'$C_L = {c_l_opt:.2f}, C_D = {c_d_opt:.3f}$',
+    xy=(c_d_opt, c_l_opt),
+    xytext=(c_d_opt + 0.02, c_l_opt - 0.25),
+    arrowprops=dict(arrowstyle='->', color='#9467bd', lw=1.5, connectionstyle='arc3,rad=-0.1'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#9467bd', alpha=0.9)
+)
+
+ax1.axhline(0, color='black', linestyle='-', linewidth=0.8, alpha=0.6)
+ax1.set_xlabel(r'Drag Coefficient, $C_D$', fontsize=11, fontweight='bold', labelpad=8)
+ax1.set_ylabel(r'Lift Coefficient, $C_L$', fontsize=11, fontweight='bold', labelpad=8)
+ax1.set_title(r'Drag Breakdown & Total Drag Polar ($C_D$ vs. $C_L$)', fontsize=11, fontweight='bold', pad=10)
+ax1.set_xlim(0, 0.15)
+ax1.set_ylim(-0.2, 1.6)
+ax1.grid(True, linestyle='--', alpha=0.5)
+ax1.legend(loc='lower right', framealpha=0.9, fontsize=8.5)
+
+# --- RIGHT SUBPLOT: Aerodynamic Efficiency (L/D Curve) ---
+ax2.plot(c_l_grid, l_d_ratio, color='#ff7f0e', linewidth=2.2, label=r'Lift-to-Drag Ratio ($L/D = C_L / C_D$)')
+ax2.plot(c_l_opt, max_l_d_val, marker='o', markersize=7, color='#d62728', zorder=5)
+
+# Highlight Maximum L/D Peak
+ax2.annotate(
+    fr'$(L/D)_{{\mathrm{{max}}}} = {max_l_d_val:.2f}$' + '\n' + fr'at $C_{{L,\mathrm{{opt}}}} = {c_l_opt:.2f}$',
+    xy=(c_l_opt, max_l_d_val),
+    xytext=(c_l_opt + 0.15, max_l_d_val - 3.5),
+    arrowprops=dict(arrowstyle='->', color='#d62728', lw=1.5, connectionstyle='arc3,rad=0.1'),
+    fontsize=9,
+    bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#d62728', alpha=0.9)
+)
+
+# Equidistant drag intersection reference line (C_D0 = C_Di at max L/D)
+ax2.axvline(c_l_opt, color='#7f7f7f', linestyle=':', linewidth=1.4)
+
+ax2.axhline(0, color='black', linestyle='-', linewidth=0.8, alpha=0.6)
+ax2.set_xlabel(r'Lift Coefficient, $C_L$', fontsize=11, fontweight='bold', labelpad=8)
+ax2.set_ylabel(r'Aerodynamic Efficiency, $L/D$', fontsize=11, fontweight='bold', labelpad=8)
+ax2.set_title(r'Aerodynamic Efficiency Curve ($L/D$ vs. $C_L$)', fontsize=11, fontweight='bold', pad=10)
+ax2.set_xlim(-0.2, 1.6)
+ax2.set_ylim(-5, max_l_d_val + 4.0)
+ax2.grid(True, linestyle='--', alpha=0.5)
+ax2.legend(loc='upper right', framealpha=0.9, fontsize=8.5)
+
+plt.tight_layout()
+
+# Save High-Resolution PDF Vector Graphic for Overleaf Insertion
+output_filename = "simulation_4_drag_polar.pdf"
+plt.savefig(output_filename, format='pdf', dpi=300, bbox_inches='tight')
+print(f"[SUCCESS] High-resolution vector plot generated and exported as: '{output_filename}'")
+
+# Display Plot
+plt.show()
